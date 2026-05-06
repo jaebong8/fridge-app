@@ -24,7 +24,10 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.yourname.fridgeapp"
+      "package": "com.yourname.fridgeapp",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -41,10 +44,17 @@
           "icon": "./assets/icon.png",
           "color": "#3a9170"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b90a0ca0-8e91-496a-bf3f-ab426e4808ba"
+      }
     }
   }
 }

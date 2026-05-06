@@ -8,6 +8,7 @@ import { useInventoryStore } from '../../lib/store/inventoryStore';
 import { useAppStore } from '../../lib/store/appStore';
 import { dayDiff, dDay, expiryStatus, todayLabel } from '../../lib/date';
 import { colors, type, shadow, spacing } from '../../lib/tokens';
+import { supabase } from '../../lib/supabase';
 import { Item } from '../../types';
 
 const ACTIVITY_COLORS: Record<string, string> = {
@@ -257,6 +258,18 @@ export default function HomeScreen() {
             </Pressable>
           ))}
 
+          {/* Logout */}
+          <Pressable
+            onPress={async () => {
+              closeFridgeSheet();
+              await supabase.auth.signOut();
+            }}
+            style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Icon name="logout" size={16} color={colors.danger} />
+            <Text style={styles.logoutText}>로그아웃</Text>
+          </Pressable>
+
           {/* New fridge */}
           {showNewFridgeInput ? (
             <View style={styles.newFridgeInputRow}>
@@ -468,6 +481,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElev, borderRadius: 14,
     fontSize: 14, color: colors.ink900, ...shadow.sm,
   },
+  logoutBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 12, paddingHorizontal: 4, marginBottom: 8,
+  },
+  logoutText: { fontSize: 14, fontWeight: '600', color: colors.danger },
   newFridgeConfirmBtn: {
     height: 50, paddingHorizontal: 18, borderRadius: 14,
     backgroundColor: colors.ink900, alignItems: 'center', justifyContent: 'center',

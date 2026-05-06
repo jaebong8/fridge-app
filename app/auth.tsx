@@ -4,10 +4,14 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { supabase } from '../lib/supabase';
 import { colors, type, spacing, radius, shadow } from '../lib/tokens';
 
 type Mode = 'login' | 'signup';
+
+const REDIRECT_URL = 'fridgeapp://auth/callback';
 
 export default function Auth() {
   const [mode, setMode] = useState<Mode>('login');
@@ -43,6 +47,71 @@ export default function Auth() {
       }
     }
     setLoading(false);
+  };
+
+  const signInWithProvider = async (provider: 'google' | 'kakao') => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const kakaoScopes = 'profile_nickname profile_image'; // 이메일 제외 (비즈니스 인증 필요)
+
+      // 웹: 현재 페이지를 OAuth로 리다이렉트 (딥링크 불필요)
+      if (Platform.OS === 'web') {
+        const redirectTo = typeof window !== 'undefined' ? window.location.origin : REDIRECT_URL;
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo,
+            ...(provider === 'kakao' && { scopes: kakaoScopes }),
+          },
+        });
+        if (error) setError('소셜 로그인 준비 중 오류가 발생했어요.');
+        return;
+      }
+
+      // 네이티브 (Android/iOS)
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: REDIRECT_URL,
+          skipBrowserRedirect: true,
+          ...(provider === 'kakao' && { scopes: kakaoScopes }),
+        },
+      });
+      if (error || !data.url) {
+        setError('소셜 로그인 준비 중 오류가 발생했어요.');
+        return;
+      }
+
+      const authUrl = data.url;
+      const redirectUrl = await new Promise<string | null>((resolve) => {
+        const sub = Linking.addEventListener('url', ({ url }) => {
+          sub.remove();
+          resolve(url);
+        });
+        WebBrowser.openAuthSessionAsync(authUrl, REDIRECT_URL).then((result) => {
+          sub.remove();
+          resolve(result.type === 'success' ? result.url : null);
+        });
+      });
+
+      if (!redirectUrl) return;
+
+      const parsed = Linking.parse(redirectUrl);
+      const code = parsed.queryParams?.code as string | undefined;
+      if (!code) {
+        setError('인증 코드를 받지 못했어요. 다시 시도해주세요.');
+        return;
+      }
+
+      const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+      if (sessionError) setError('로그인에 실패했어요. 다시 시도해주세요.');
+    } catch {
+      setError('소셜 로그인 중 오류가 발생했어요.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const switchMode = (next: Mode) => {
@@ -134,6 +203,32 @@ export default function Auth() {
                 : <Text style={s.btnText}>{mode === 'login' ? '로그인' : '가입하기'}</Text>
               }
             </Pressable>
+
+            <View style={s.dividerRow}>
+              <View style={s.dividerLine} />
+              <Text style={s.dividerText}>또는</Text>
+              <View style={s.dividerLine} />
+            </View>
+
+            <View style={s.socialRow}>
+              <Pressable
+                onPress={() => signInWithProvider('google')}
+                disabled={loading}
+                style={({ pressed }) => [s.socialBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+              >
+                <Text style={s.googleG}>G</Text>
+                <Text style={s.socialBtnText}>Google</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => signInWithProvider('kakao')}
+                disabled={loading}
+                style={({ pressed }) => [s.socialBtn, s.kakaoBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+              >
+                <Text style={s.kakaoIcon}>💬</Text>
+                <Text style={[s.socialBtnText, s.kakaoText]}>카카오</Text>
+              </Pressable>
+            </View>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -234,4 +329,42 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   btnText: { ...type.titleSm, color: '#fff', fontSize: 15 },
+
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginVertical: -spacing.sm,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.ink100 },
+  dividerText: { ...type.caption, color: colors.ink300 },
+
+  socialRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  socialBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.ink200,
+    backgroundColor: colors.bgElev,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  kakaoBtn: {
+    backgroundColor: '#FEE500',
+    borderColor: '#FEE500',
+  },
+  googleG: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#4285F4',
+  },
+  kakaoIcon: { fontSize: 16 },
+  socialBtnText: { ...type.titleSm, color: colors.ink700, fontSize: 15 },
+  kakaoText: { color: '#3C1E1E' },
 });

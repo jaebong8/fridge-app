@@ -1,5 +1,5 @@
 import React from 'react';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path, Circle, Polyline, Line } from 'react-native-svg';
 
 interface IconProps {
   name: string;
@@ -78,6 +78,8 @@ export function Icon({ name, size = 22, color = 'currentColor', stroke = 1.7 }: 
       return <Svg {...p}><Circle cx="6" cy="12" r="1.4"/><Circle cx="12" cy="12" r="1.4"/><Circle cx="18" cy="12" r="1.4"/></Svg>;
     case 'settings':
       return <Svg {...p}><Circle cx="12" cy="12" r="3"/><Path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></Svg>;
+    case 'logout':
+      return <Svg {...p}><Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><Polyline points="16 17 21 12 16 7"/><Line x1="21" y1="12" x2="9" y2="12"/></Svg>;
     default:
       return null;
   }
