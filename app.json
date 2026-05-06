@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "냉장고",
+    "name": "나만의 냉장고",
     "slug": "fridge-app",
     "version": "1.0.0",
     "scheme": "fridgeapp",
@@ -37,8 +37,7 @@
       "expo-router",
       "expo-font",
       "expo-secure-store",
-      "expo-barcode-scanner",
-      [
+[
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
