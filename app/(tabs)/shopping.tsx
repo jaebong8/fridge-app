@@ -65,13 +65,17 @@ export default function ShoppingScreen() {
       Linking.openURL('https://map.kakao.com/link/search/마트');
       return;
     }
-    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    const { latitude, longitude } = loc.coords;
-    Linking.openURL(
-      `https://map.kakao.com/link/search/마트,${latitude},${longitude}`
-    ).catch(() =>
-      Linking.openURL(`https://www.google.com/maps/search/마트/@${latitude},${longitude},15z`)
-    );
+    try {
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+      Linking.openURL(
+        `https://map.kakao.com/link/search/마트,${latitude},${longitude}`
+      ).catch(() =>
+        Linking.openURL(`https://www.google.com/maps/search/마트/@${latitude},${longitude},15z`)
+      );
+    } catch {
+      Linking.openURL('https://map.kakao.com/link/search/마트');
+    }
   };
 
   const handleShowAdd = () => {
