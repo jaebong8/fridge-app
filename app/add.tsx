@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, TextInput, ActivityIndicator, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Icon } from '../components/ui';
 import { useInventoryStore } from '../lib/store/inventoryStore';
 import { useAppStore } from '../lib/store/appStore';
@@ -31,18 +31,19 @@ export default function AddScreen() {
   const [amount, setAmount]     = useState('1');
   const [loc, setLoc]           = useState<ItemLocation>('냉장');
   const [category, setCategory] = useState<ItemCategory>('채소');
-  const [days, setDays]         = useState(7);
+  const defaultExp = new Date();
+  defaultExp.setDate(defaultExp.getDate() + 7);
+  const [expDate, setExpDate]   = useState(defaultExp);
+  const [showPicker, setShowPicker] = useState(false);
 
   const handleManualAdd = async () => {
     if (!name.trim()) return;
-    const exp = new Date();
-    exp.setDate(exp.getDate() + days);
     await addItem({
       name: name.trim(),
       category,
       amount: amount || '1',
       loc,
-      exp: exp.toISOString().slice(0, 10),
+      exp: expDate.toISOString().slice(0, 10),
       fridgeId: currentFridgeId,
     });
     showToast(`${name} 추가 완료`);
@@ -94,7 +95,10 @@ export default function AddScreen() {
             amount={amount} setAmount={setAmount}
             loc={loc} setLoc={setLoc}
             category={category} setCategory={setCategory}
-            days={days} setDays={setDays}
+            expDate={expDate}
+            showPicker={showPicker}
+            setShowPicker={setShowPicker}
+            onDateChange={(date: Date) => setExpDate(date)}
           />
         )}
       </ScrollView>
@@ -127,23 +131,30 @@ interface DetectedItem {
 const GEMINI_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 
 async function analyzeReceipt(base64: string): Promise<DetectedItem[]> {
-  const genAI = new GoogleGenerativeAI(GEMINI_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
   const prompt =
     '이 영수증 이미지에서 식재료 또는 음식 항목만 찾아주세요.\n' +
     '다음 JSON 배열 형식으로만 응답해주세요 (마크다운, 설명 없이 순수 JSON만):\n' +
     '[{"name":"식재료명","amount":"수량(예:1개,500g)","category":"채소|과일|육류|단백질|유제품|소스|곡물 중 하나","loc":"냉장|냉동|실온 중 하나"}]\n' +
     '식재료가 없으면 []';
 
-  const result = await model.generateContent([
-    { inlineData: { data: base64, mimeType: 'image/jpeg' } },
-    prompt,
-  ]);
-
-  const text = result.response.text().trim();
-  const json = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-  const raw = JSON.parse(json) as Array<{ name: string; amount: string; category: string; loc: string }>;
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { inlineData: { data: base64, mimeType: 'image/jpeg' } },
+          { text: prompt },
+        ]}],
+      }),
+    },
+  );
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error?.message ?? '영수증 분석 실패');
+  const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const match = text.match(/\[[\s\S]*\]/);
+  const raw = JSON.parse(match ? match[0] : '[]') as Array<{ name: string; amount: string; category: string; loc: string }>;
 
   const validCategories = new Set<string>(['채소', '과일', '육류', '단백질', '유제품', '소스', '곡물']);
   const validLocations  = new Set<string>(['냉장', '냉동', '실온']);
@@ -352,7 +363,13 @@ function ReceiptMode({
 
 /* ───────── ManualMode ───────── */
 
-function ManualMode({ name, setName, amount, setAmount, loc, setLoc, category, setCategory, days, setDays }: any) {
+function ManualMode({ name, setName, amount, setAmount, loc, setLoc, category, setCategory, expDate, showPicker, setShowPicker, onDateChange }: any) {
+  const formatDate = (d: Date) =>
+    `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+
+  const diffDays = Math.round((expDate.getTime() - Date.now()) / 86400000);
+  const diffLabel = diffDays === 0 ? '오늘' : diffDays > 0 ? `${diffDays}일 후` : `${Math.abs(diffDays)}일 전`;
+
   return (
     <View style={{ gap: 12 }}>
       <Field label="이름">
@@ -411,19 +428,28 @@ function ManualMode({ name, setName, amount, setAmount, loc, setLoc, category, s
         </View>
       </Field>
 
-      <Field label={`유통기한 · ${days}일 후`}>
-        <View style={styles.sliderCard}>
-          <View style={styles.sliderTrack}>
-            <View style={[styles.sliderFill, { width: `${(days / 30) * 100}%` as any }]} />
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
-            {[1, 5, 10, 15, 20, 25, 30].map(d => (
-              <Pressable key={d} onPress={() => setDays(d)} style={[styles.dayBtn, days === d && styles.dayBtnActive]}>
-                <Text style={[styles.dayBtnText, days === d && { color: '#fff' }]}>{d}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
+      <Field label="유통기한">
+        <Pressable
+          onPress={() => setShowPicker(true)}
+          style={({ pressed }) => [styles.dateBtn, pressed && { opacity: 0.8 }]}
+        >
+          <Icon name="clock" size={16} color={colors.mint600} />
+          <Text style={styles.dateBtnText}>{formatDate(expDate)}</Text>
+          <Text style={styles.dateBtnSub}>{diffLabel}</Text>
+        </Pressable>
+
+        {showPicker && (
+          <DateTimePicker
+            value={expDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'inline' : 'default'}
+            minimumDate={new Date()}
+            onChange={(_, date) => {
+              setShowPicker(Platform.OS === 'ios');
+              if (date) onDateChange(date);
+            }}
+          />
+        )}
       </Field>
     </View>
   );
@@ -578,13 +604,10 @@ const styles = StyleSheet.create({
   },
   locBtnActive: { backgroundColor: colors.mint600 },
   locBtnText: { fontSize: 13, fontWeight: '700', color: colors.ink700 },
-  sliderCard: { backgroundColor: colors.bgElev, borderRadius: 14, padding: 14, ...shadow.sm },
-  sliderTrack: { height: 6, borderRadius: 3, backgroundColor: colors.ink100, overflow: 'hidden' },
-  sliderFill: { height: '100%', backgroundColor: colors.mint600, borderRadius: 3 },
-  dayBtn: {
-    flex: 1, paddingVertical: 4, borderRadius: 8,
-    alignItems: 'center', backgroundColor: 'transparent',
+  dateBtn: {
+    height: 52, paddingHorizontal: 16, backgroundColor: colors.bgElev,
+    borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 10, ...shadow.sm,
   },
-  dayBtnActive: { backgroundColor: colors.mint600 },
-  dayBtnText: { fontSize: 11, fontWeight: '600', color: colors.ink500 },
+  dateBtnText: { fontSize: 15, fontWeight: '600', color: colors.ink900, flex: 1 },
+  dateBtnSub: { fontSize: 12, color: colors.mint600, fontWeight: '600' },
 });

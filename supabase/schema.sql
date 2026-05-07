@@ -87,7 +87,16 @@ create or replace function public.handle_new_user()
 returns trigger as $$
 begin
   insert into public.profiles (id, nickname)
-  values (new.id, coalesce(new.raw_user_meta_data->>'nickname', split_part(new.email, '@', 1)));
+  values (
+    new.id,
+    coalesce(
+      nullif(trim(new.raw_user_meta_data->>'nickname'), ''),
+      nullif(trim(new.raw_user_meta_data->>'full_name'), ''),
+      nullif(trim(new.raw_user_meta_data->>'name'), ''),
+      nullif(split_part(new.email, '@', 1), ''),
+      '사용자'
+    )
+  );
   return new;
 end;
 $$ language plpgsql security definer;

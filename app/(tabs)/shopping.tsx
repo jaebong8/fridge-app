@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Linking } from 'react-native';
+import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon, Card, Divider } from '../../components/ui';
 import { useShoppingStore } from '../../lib/store/shoppingStore';
@@ -58,9 +59,18 @@ export default function ShoppingScreen() {
     ].filter(s => !inList.has(s.name) && !inInventory.has(s.name)).slice(0, 3);
   }, [activities, items, inventoryItems]);
 
-  const openNearbyStore = () => {
-    Linking.openURL('https://map.kakao.com/link/search/마트').catch(() =>
-      Linking.openURL('https://www.google.com/maps/search/마트+근처/'),
+  const openNearbyStore = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Linking.openURL('https://map.kakao.com/link/search/마트');
+      return;
+    }
+    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    const { latitude, longitude } = loc.coords;
+    Linking.openURL(
+      `https://map.kakao.com/link/search/마트,${latitude},${longitude}`
+    ).catch(() =>
+      Linking.openURL(`https://www.google.com/maps/search/마트/@${latitude},${longitude},15z`)
     );
   };
 

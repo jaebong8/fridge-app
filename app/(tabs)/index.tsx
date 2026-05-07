@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, TextInput } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, Alert, Clipboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
@@ -20,13 +20,20 @@ const ACTIVITY_COLORS: Record<string, string> = {
 export default function HomeScreen() {
   const router = useRouter();
   const { items } = useInventoryStore();
-  const { currentFridge, fridges, setCurrentFridge, createFridge, userName, showToast, activities } = useAppStore();
+  const { currentFridge, fridges, setCurrentFridge, createFridge, updateFridgeName, deleteFridge, getOrCreateInviteCode, joinByInviteCode, userName, showToast, activities } = useAppStore();
 
   const fridgeSheetRef = useRef<BottomSheet>(null);
   const [fridgeOpen, setFridgeOpen] = useState(false);
   const [newFridgeName, setNewFridgeName] = useState('');
   const [showNewFridgeInput, setShowNewFridgeInput] = useState(false);
   const [creatingFridge, setCreatingFridge] = useState(false);
+  const [editingFridgeId, setEditingFridgeId] = useState<string | null>(null);
+  const [editingFridgeName, setEditingFridgeName] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [showInviteFor, setShowInviteFor] = useState<string | null>(null);
+  const [joinCode, setJoinCode] = useState('');
+  const [showJoinInput, setShowJoinInput] = useState(false);
+  const [joining, setJoining] = useState(false);
 
   const expiringSoon = items
     .map(i => ({ ...i, n: dayDiff(i.exp) }))
@@ -50,6 +57,10 @@ export default function HomeScreen() {
   const closeFridgeSheet = () => {
     setFridgeOpen(false);
     setShowNewFridgeInput(false);
+    setShowInviteFor(null);
+    setInviteCode('');
+    setShowJoinInput(false);
+    setJoinCode('');
     fridgeSheetRef.current?.close();
   };
 
@@ -234,29 +245,172 @@ export default function HomeScreen() {
         <BottomSheetView style={{ flex: 1, padding: 20 }}>
           <Text style={[type.titleMd, { marginBottom: 16 }]}>냉장고 선택</Text>
           {fridges.map(f => (
-            <Pressable
-              key={f.id}
-              onPress={() => { setCurrentFridge(f.id); closeFridgeSheet(); }}
-              style={({ pressed }) => [
-                styles.fridgeRow,
-                currentFridge?.id === f.id && styles.fridgeRowActive,
-                pressed && { opacity: 0.75 },
-              ]}
-            >
-              <View style={[styles.fridgeAvatar, { backgroundColor: f.color ?? colors.mint500 }]}>
-                <Text style={styles.fridgeAvatarText}>{f.name[0]}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[type.titleSm, { color: colors.ink900 }]}>{f.name}</Text>
-                <Text style={{ fontSize: 11, color: colors.ink500, marginTop: 2 }}>
-                  {currentFridge?.id === f.id ? `${items.length}개` : '—'} · {f.members.map(m => m.name).join(', ')}
-                </Text>
-              </View>
-              {currentFridge?.id === f.id && (
-                <Icon name="check" size={20} color={colors.mint600} stroke={2.4} />
+            <View key={f.id}>
+              {editingFridgeId === f.id ? (
+                <View style={styles.newFridgeInputRow}>
+                  <TextInput
+                    value={editingFridgeName}
+                    onChangeText={setEditingFridgeName}
+                    placeholderTextColor={colors.ink300}
+                    style={styles.newFridgeInput}
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={async () => {
+                      if (!editingFridgeName.trim()) return;
+                      await updateFridgeName(f.id, editingFridgeName.trim());
+                      showToast('냉장고 이름 변경됨');
+                      setEditingFridgeId(null);
+                    }}
+                  />
+                  <Pressable
+                    onPress={async () => {
+                      if (!editingFridgeName.trim()) return;
+                      await updateFridgeName(f.id, editingFridgeName.trim());
+                      showToast('냉장고 이름 변경됨');
+                      setEditingFridgeId(null);
+                    }}
+                    style={[styles.newFridgeConfirmBtn, !editingFridgeName.trim() && { opacity: 0.5 }]}
+                  >
+                    <Text style={styles.newFridgeConfirmText}>저장</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setEditingFridgeId(null)}
+                    style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.6 }]}
+                    hitSlop={8}
+                  >
+                    <Icon name="x" size={16} color={colors.ink400} />
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => { setCurrentFridge(f.id); closeFridgeSheet(); }}
+                  style={({ pressed }) => [
+                    styles.fridgeRow,
+                    currentFridge?.id === f.id && styles.fridgeRowActive,
+                    pressed && { opacity: 0.75 },
+                  ]}
+                >
+                  <View style={[styles.fridgeAvatar, { backgroundColor: f.color ?? colors.mint500 }]}>
+                    <Text style={styles.fridgeAvatarText}>{f.name[0]}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[type.titleSm, { color: colors.ink900 }]}>{f.name}</Text>
+                    <Text style={{ fontSize: 11, color: colors.ink500, marginTop: 2 }}>
+                      {currentFridge?.id === f.id ? `${items.length}개` : '—'} · {f.members.map(m => m.name).join(', ')}
+                    </Text>
+                  </View>
+                  {currentFridge?.id === f.id && (
+                    <Icon name="check" size={20} color={colors.mint600} stroke={2.4} />
+                  )}
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setEditingFridgeId(f.id);
+                      setEditingFridgeName(f.name);
+                    }}
+                    style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.6 }]}
+                    hitSlop={8}
+                  >
+                    <Icon name="edit" size={16} color={colors.ink400} />
+                  </Pressable>
+                  {fridges.length > 1 && (
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        Alert.alert(
+                          '냉장고 삭제',
+                          `"${f.name}"을(를) 삭제할까요?\n재고와 활동 기록이 모두 사라져요.`,
+                          [
+                            { text: '취소', style: 'cancel' },
+                            {
+                              text: '삭제', style: 'destructive',
+                              onPress: () => {
+                                deleteFridge(f.id);
+                                showToast(`${f.name} 삭제됨`);
+                                if (fridges.length <= 2) closeFridgeSheet();
+                              },
+                            },
+                          ],
+                        );
+                      }}
+                      style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.6 }]}
+                      hitSlop={8}
+                    >
+                      <Icon name="trash" size={16} color={colors.danger} />
+                    </Pressable>
+                  )}
+                </Pressable>
               )}
-            </Pressable>
+            </View>
           ))}
+
+          {/* 초대 코드 */}
+          {showInviteFor && inviteCode ? (
+            <Pressable
+              onPress={() => {
+                Clipboard.setString(inviteCode);
+                showToast('초대 코드 복사됨', 'success');
+              }}
+              style={({ pressed }) => [styles.inviteCodeBox, pressed && { opacity: 0.8 }]}
+            >
+              <Text style={styles.inviteCodeLabel}>초대 코드 (탭하여 복사)</Text>
+              <Text style={styles.inviteCode}>{inviteCode}</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={async () => {
+                if (!currentFridge) return;
+                const code = await getOrCreateInviteCode(currentFridge.id);
+                setInviteCode(code);
+                setShowInviteFor(currentFridge.id);
+              }}
+              style={({ pressed }) => [styles.newFridgeBtn, pressed && { opacity: 0.75 }]}
+            >
+              <Icon name="people" size={16} color={colors.ink500} />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: colors.ink500 }}>멤버 초대하기</Text>
+            </Pressable>
+          )}
+
+          {/* 코드로 참여 */}
+          {showJoinInput ? (
+            <View style={styles.newFridgeInputRow}>
+              <TextInput
+                value={joinCode}
+                onChangeText={t => setJoinCode(t.toUpperCase())}
+                placeholder="초대 코드 입력"
+                placeholderTextColor={colors.ink300}
+                style={styles.newFridgeInput}
+                autoCapitalize="characters"
+                autoFocus
+                maxLength={6}
+              />
+              <Pressable
+                onPress={async () => {
+                  if (!joinCode.trim()) return;
+                  setJoining(true);
+                  const result = await joinByInviteCode(joinCode);
+                  setJoining(false);
+                  setShowJoinInput(false);
+                  setJoinCode('');
+                  if (result === 'ok') showToast('냉장고에 참여했어요!', 'success');
+                  else if (result === 'already') showToast('이미 참여 중인 냉장고예요');
+                  else showToast('유효하지 않은 코드예요');
+                }}
+                disabled={joining || !joinCode.trim()}
+                style={[styles.newFridgeConfirmBtn, (!joinCode.trim() || joining) && { opacity: 0.5 }]}
+              >
+                <Text style={styles.newFridgeConfirmText}>참여</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => { setShowJoinInput(true); setShowInviteFor(null); }}
+              style={({ pressed }) => [styles.newFridgeBtn, pressed && { opacity: 0.75 }]}
+            >
+              <Icon name="plus" size={16} color={colors.ink500} />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: colors.ink500 }}>코드로 참여하기</Text>
+            </Pressable>
+          )}
 
           {/* Logout */}
           <Pressable
@@ -467,6 +621,7 @@ const styles = StyleSheet.create({
   fridgeRowActive: { backgroundColor: colors.mint50, borderColor: colors.mint300 },
   fridgeAvatar: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   fridgeAvatarText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  deleteBtn: { padding: 4, marginLeft: 4 },
   newFridgeBtn: {
     height: 50, borderRadius: 14,
     borderWidth: 1.5, borderColor: colors.ink200, borderStyle: 'dashed',
@@ -481,6 +636,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElev, borderRadius: 14,
     fontSize: 14, color: colors.ink900, ...shadow.sm,
   },
+  inviteCodeBox: {
+    backgroundColor: colors.mint50, borderRadius: 14, padding: 14,
+    alignItems: 'center', borderWidth: 1.5, borderColor: colors.mint200, marginBottom: 8,
+  },
+  inviteCodeLabel: { fontSize: 11, color: colors.mint700, fontWeight: '600', marginBottom: 6 },
+  inviteCode: { fontSize: 28, fontWeight: '800', color: colors.mint800, letterSpacing: 6 },
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingVertical: 12, paddingHorizontal: 4, marginBottom: 8,

@@ -24,6 +24,11 @@ interface AppStore {
   fetchProfile: () => Promise<void>;
   fetchActivities: (fridgeId: string) => Promise<void>;
   createFridge: (name: string) => Promise<void>;
+  updateFridgeName: (id: string, name: string) => Promise<void>;
+  deleteFridge: (id: string) => Promise<void>;
+  getOrCreateInviteCode: (fridgeId: string) => Promise<string>;
+  joinByInviteCode: (code: string) => Promise<'ok' | 'not_found' | 'already'>;
+
   signOut: () => Promise<void>;
 }
 
@@ -59,7 +64,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
       .select('nickname')
       .eq('id', user.id)
       .single();
-    if (data) set({ userName: data.nickname });
+    const meta = user.user_metadata ?? {};
+    const nickname =
+      data?.nickname?.trim() ||
+      meta.nickname ||
+      meta.full_name ||
+      meta.name ||
+      user.email?.split('@')[0] ||
+      '';
+    set({ userName: nickname });
   },
 
   fetchFridges: async () => {
@@ -163,6 +176,74 @@ export const useAppStore = create<AppStore>((set, get) => ({
         currentFridge: newFridge,
       }));
     }
+  },
+
+  updateFridgeName: async (id, name) => {
+    await supabase.from('fridges').update({ name }).eq('id', id);
+    const fridges = get().fridges.map(f => f.id === id ? { ...f, name } : f);
+    const currentFridge = get().currentFridgeId === id
+      ? fridges.find(f => f.id === id)
+      : get().currentFridge;
+    set({ fridges, currentFridge });
+  },
+
+  deleteFridge: async (id) => {
+    const { fridges, currentFridgeId } = get();
+    if (fridges.length <= 1) return; // 마지막 냉장고는 삭제 불가
+    await supabase.from('fridges').delete().eq('id', id);
+    const remaining = fridges.filter(f => f.id !== id);
+    const next = currentFridgeId === id ? remaining[0] : fridges.find(f => f.id === currentFridgeId)!;
+    set({ fridges: remaining, currentFridgeId: next.id, currentFridge: next });
+  },
+
+  getOrCreateInviteCode: async (fridgeId) => {
+    const { data: existing } = await supabase
+      .from('fridge_invites')
+      .select('code')
+      .eq('fridge_id', fridgeId)
+      .single();
+    if (existing) return existing.code;
+
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    await supabase.from('fridge_invites').insert({ fridge_id: fridgeId, code });
+    return code;
+  },
+
+  joinByInviteCode: async (code) => {
+    const { data: invite } = await supabase
+      .from('fridge_invites')
+      .select('fridge_id')
+      .eq('code', code.trim().toUpperCase())
+      .single();
+    if (!invite) return 'not_found';
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return 'not_found';
+
+    const { data: existing } = await supabase
+      .from('fridge_members')
+      .select('id')
+      .eq('fridge_id', invite.fridge_id)
+      .eq('user_id', user.id)
+      .single();
+    if (existing) return 'already';
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('nickname')
+      .eq('id', user.id)
+      .single();
+    const nickname = profile?.nickname || user.email?.split('@')[0] || '멤버';
+
+    await supabase.from('fridge_members').insert({
+      fridge_id: invite.fridge_id,
+      user_id: user.id,
+      nickname,
+    });
+
+    await get().fetchFridges();
+    return 'ok';
   },
 
   signOut: async () => {

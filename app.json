@@ -37,14 +37,15 @@
       "expo-router",
       "expo-font",
       "expo-secure-store",
-[
+      [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
           "color": "#3a9170"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

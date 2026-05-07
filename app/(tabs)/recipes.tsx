@@ -13,7 +13,7 @@ import { useState } from 'react';
 export default function RecipesScreen() {
   const { items } = useInventoryStore();
   const { addItem: addShoppingItem } = useShoppingStore();
-  const { currentFridgeId } = useAppStore();
+  const { currentFridgeId, showToast } = useAppStore();
   const { recipes, loading, error, fetchRecipes, reset } = useRecipeStore();
 
   const [activeTab, setActiveTab] = useState('match');
@@ -76,7 +76,7 @@ export default function RecipesScreen() {
           <View style={[styles.loadingBox, { gap: 12 }]}>
             <Icon name="bell" size={28} color={colors.danger} />
             <Text style={[type.titleSm, { color: colors.ink900 }]}>레시피를 불러오지 못했어요</Text>
-            <Pressable
+<Pressable
               onPress={() => { reset(); fetchRecipes(items, currentFridgeId); }}
               style={styles.retryBtn}
             >
@@ -171,9 +171,10 @@ export default function RecipesScreen() {
             <RecipeDetail
               r={selected}
               onClose={closeRecipe}
-              onAddShopping={(name) =>
-                addShoppingItem(name, '1개', currentFridgeId, '레시피 · ' + selected.name)
-              }
+              onAddShopping={(name) => {
+                addShoppingItem(name, '1개', currentFridgeId, '레시피 · ' + selected.name);
+                showToast(`${name} 쇼핑 추가됨`, 'success');
+              }}
             />
           </BottomSheetScrollView>
         )}
@@ -231,37 +232,42 @@ function RecipeDetail({ r, onClose, onAddShopping }: {
       <Text style={[type.bodySm, { color: colors.ink500, marginTop: 4 }]}>{r.whyText}</Text>
 
       <Text style={[type.caption, { marginTop: 18, color: colors.ink400 }]}>
-        재료 ({r.needs.length + r.extras.length})
+        재료 ({r.needs.length + r.extras.length}) · {r.servings ?? 2}인분 기준
       </Text>
       <View style={{ gap: 6, marginTop: 8 }}>
-        {r.matchedItems.map(item => (
-          <View key={item.id} style={styles.ingredientHave}>
-            <Icon name="check" size={16} color={colors.mint600} stroke={2.4} />
-            <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink900 }}>
-              {item.name}
-            </Text>
-            <Text style={{ fontSize: 12, color: colors.ink500 }}>{item.amount} 보유</Text>
-          </View>
-        ))}
-        {r.missingNeeds.map(m => (
+        {r.needs.map(need => {
+          const have = r.matchedItems.find(i => i.name.includes(need.name) || need.name.includes(i.name));
+          if (have) {
+            return (
+              <View key={need.name} style={styles.ingredientHave}>
+                <Icon name="check" size={16} color={colors.mint600} stroke={2.4} />
+                <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink900 }}>{need.name}</Text>
+                <Text style={{ fontSize: 12, color: colors.ink500 }}>{need.qty}</Text>
+              </View>
+            );
+          }
+          return (
+            <Pressable
+              key={need.name}
+              onPress={() => onAddShopping(need.name)}
+              style={({ pressed }) => [styles.ingredientMiss, pressed && { opacity: 0.75 }]}
+            >
+              <Icon name="cart" size={16} color={colors.info} />
+              <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink900 }}>{need.name}</Text>
+              <Text style={{ fontSize: 12, color: colors.ink500, marginRight: 4 }}>{need.qty}</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.info }}>+ 추가</Text>
+            </Pressable>
+          );
+        })}
+        {r.extras.map(extra => (
           <Pressable
-            key={m}
-            onPress={() => onAddShopping(m)}
-            style={({ pressed }) => [styles.ingredientMiss, pressed && { opacity: 0.75 }]}
-          >
-            <Icon name="cart" size={16} color={colors.info} />
-            <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink900 }}>{m}</Text>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.info }}>+ 쇼핑 추가</Text>
-          </Pressable>
-        ))}
-        {r.extras.map(m => (
-          <Pressable
-            key={m}
-            onPress={() => onAddShopping(m)}
+            key={extra.name}
+            onPress={() => onAddShopping(extra.name)}
             style={({ pressed }) => [styles.ingredientExtra, pressed && { opacity: 0.75 }]}
           >
             <Icon name="cart" size={16} color={colors.ink400} />
-            <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink700 }}>{m}</Text>
+            <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink700 }}>{extra.name}</Text>
+            <Text style={{ fontSize: 12, color: colors.ink500, marginRight: 4 }}>{extra.qty}</Text>
             <Text style={{ fontSize: 11, fontWeight: '700', color: colors.ink400 }}>있으면 좋아요</Text>
           </Pressable>
         ))}
@@ -281,12 +287,6 @@ function RecipeDetail({ r, onClose, onAddShopping }: {
         ))}
       </View>
 
-      <Pressable
-        style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.85 }]}
-        onPress={onClose}
-      >
-        <Text style={styles.startBtnText}>요리 시작하기</Text>
-      </Pressable>
     </View>
   );
 }
@@ -381,9 +381,5 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   stepNumText: { fontSize: 12, fontWeight: '700', color: '#fff' },
-  startBtn: {
-    marginTop: 20, height: 52, borderRadius: 16, backgroundColor: colors.ink900,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  startBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
 });
