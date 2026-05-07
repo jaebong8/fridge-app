@@ -6,7 +6,12 @@
       "Bash(npx expo *)",
       "Bash(npm uninstall *)",
       "PowerShell(Test-Path \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\")",
-      "Read(//c//**)"
+      "Read(//c//**)",
+      "Bash(git check-ignore *)",
+      "Bash(eas env:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value \"https://qhwgmqjlhnwglkxrvzbm.supabase.co\" --type string --environment development)",
+      "Bash(eas env:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value \"https://qhwgmqjlhnwglkxrvzbm.supabase.co\" --type string --environment development --environment preview --environment production --visibility plaintext)",
+      "Bash(eas env:create --scope project --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFod2dtcWpsaG53Z2xreHJ2emJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczOTgyMDksImV4cCI6MjA5Mjk3NDIwOX0.1MFAeLw6qrkUata2ZuJQSd6wWjC4-Jo4MgkafeTQ2Ww\" --type string --environment development --environment preview --environment production --visibility sensitive)",
+      "Bash(eas env:create --scope project --name EXPO_PUBLIC_GEMINI_API_KEY --value \"AIzaSyC-BLy12mhJ1G4zqq7UIZ3Zb-c5Tt_VZto\" --type string --environment development --environment preview --environment production --visibility sensitive)"
     ]
   }
 }
